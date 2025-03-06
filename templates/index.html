@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Streaming File Upload with Metadata</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input[type="text"],
+      textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      progress {
+        width: 100%;
+        height: 20px;
+      }
+      #resultDiv {
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+        white-space: pre-wrap;
+      }
+      .status {
+        margin-top: 10px;
+        font-weight: bold;
+      }
+      .abort-btn {
+        background-color: #f44336;
+        margin-left: 10px;
+      }
+      .abort-btn:hover {
+        background-color: #d32f2f;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Streaming File Upload with Metadata</h1>
+
+    <form id="uploadForm">
+      <div class="form-group">
+        <label for="fileInput">Select File(s):</label>
+        <input type="file" id="fileInput" multiple />
+      </div>
+
+      <div class="form-group">
+        <label for="multipleFilesCheckbox">Multiple Files Mode:</label>
+        <input type="checkbox" id="multipleFilesCheckbox" />
+      </div>
+
+      <div class="form-group">
+        <label for="nameInput">Name:</label>
+        <input type="text" id="nameInput" placeholder="Enter a name" />
+      </div>
+
+      <div class="form-group">
+        <label for="descriptionInput">Description:</label>
+        <textarea
+          id="descriptionInput"
+          rows="4"
+          placeholder="Enter a description"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="uploadProgress">Upload Progress:</label>
+        <progress id="uploadProgress" value="0" max="100"></progress>
+        <div class="status" id="statusText"></div>
+      </div>
+
+      <div class="form-group">
+        <button type="submit" id="uploadButton">Upload</button>
+        <button
+          type="button"
+          id="abortButton"
+          class="abort-btn"
+          style="display: none"
+        >
+          Abort
+        </button>
+      </div>
+    </form>
+
+    <div id="resultDiv"></div>
+
+    <script src="/static/upload.js"></script>
+    <!-- <script>
+      let activeXHR = null;
+
+      // Function to upload a single file with metadata using XHR for progress monitoring
+      function uploadWithProgress(file, metadata, onProgress) {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          activeXHR = xhr;
+
+          const formData = new FormData();
+
+          // Add file and metadata
+          formData.append("file", file);
+          formData.append("data", JSON.stringify(metadata));
+
+          // Setup progress handling
+          xhr.upload.addEventListener("progress", (event) => {
+            if (event.lengthComputable) {
+              const percentComplete = (event.loaded / event.total) * 100;
+              if (onProgress) onProgress(percentComplete);
+            }
+          });
+
+          // Setup completion handler
+          xhr.addEventListener("load", () => {
+            activeXHR = null;
+            document.getElementById("abortButton").style.display = "none";
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const response = JSON.parse(xhr.responseText);
+                resolve(response);
+              } catch (error) {
+                reject(new Error("Invalid response format"));
+              }
+            } else {
+              try {
+                const errorData = JSON.parse(xhr.responseText);
+                reject(
+                  new Error(errorData.detail || `HTTP error ${xhr.status}`)
+                );
+              } catch (e) {
+                reject(new Error(`HTTP error ${xhr.status}`));
+              }
+            }
+          });
+
+          // Setup error handler
+          xhr.addEventListener("error", () => {
+            activeXHR = null;
+            document.getElementById("abortButton").style.display = "none";
+            reject(new Error("Network error occurred"));
+          });
+
+          // Setup abort handler
+          xhr.addEventListener("abort", () => {
+            activeXHR = null;
+            document.getElementById("abortButton").style.display = "none";
+            reject(new Error("Upload aborted"));
+          });
+
+          // Open connection and set headers
+          xhr.open("POST", "http://localhost:8000/upload");
+          xhr.setRequestHeader("filename", encodeURIComponent(file.name));
+
+          // Send the form data
+          xhr.send(formData);
+          document.getElementById("abortButton").style.display = "inline-block";
+        });
+      }
+
+      // Function to upload multiple files with metadata
+      function uploadMultipleWithProgress(files, metadata, onProgress) {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          activeXHR = xhr;
+
+          const formData = new FormData();
+
+          // Add metadata
+          formData.append("data", JSON.stringify(metadata));
+
+          // Set headers and append files
+          const headers = {};
+          for (let i = 0; i < files.length; i++) {
+            const filename = encodeURIComponent(files[i].name);
+            headers[`filename${i}`] = filename;
+            formData.append(`file${i}`, files[i]);
+          }
+
+          // Setup progress handling
+          xhr.upload.addEventListener("progress", (event) => {
+            if (event.lengthComputable) {
+              const percentComplete = (event.loaded / event.total) * 100;
+              if (onProgress) onProgress(percentComplete);
+            }
+          });
+
+          // Setup completion handler
+          xhr.addEventListener("load", () => {
+            activeXHR = null;
+            document.getElementById("abortButton").style.display = "none";
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const response = JSON.parse(xhr.responseText);
+                resolve(response);
+              } catch (error) {
+                reject(new Error("Invalid response format"));
+              }
+            } else {
+              try {
+                const errorData = JSON.parse(xhr.responseText);
+                reject(
+                  new Error(errorData.detail || `HTTP error ${xhr.status}`)
+                );
+              } catch (e) {
+                reject(new Error(`HTTP error ${xhr.status}`));
+              }
+            }
+          });
+
+          // Setup error handler
+          xhr.addEventListener("error", () => {
+            activeXHR = null;
+            document.getElementById("abortButton").style.display = "none";
+            reject(new Error("Network error occurred"));
+          });
+
+          // Setup abort handler
+          xhr.addEventListener("abort", () => {
+            activeXHR = null;
+            document.getElementById("abortButton").style.display = "none";
+            reject(new Error("Upload aborted"));
+          });
+
+          // Open connection
+          xhr.open("POST", "http://localhost:8000/upload-multiple");
+
+          // Set filename headers
+          for (const [key, value] of Object.entries(headers)) {
+            xhr.setRequestHeader(key, value);
+          }
+
+          // Send the form data
+          xhr.send(formData);
+          document.getElementById("abortButton").style.display = "inline-block";
+        });
+      }
+
+      // Form submission handling
+      document.addEventListener("DOMContentLoaded", () => {
+        const uploadForm = document.getElementById("uploadForm");
+        const abortButton = document.getElementById("abortButton");
+        const statusText = document.getElementById("statusText");
+        const progressBar = document.getElementById("uploadProgress");
+
+        // Abort button handler
+        abortButton.addEventListener("click", () => {
+          if (activeXHR) {
+            activeXHR.abort();
+            statusText.textContent = "Upload aborted";
+            progressBar.value = 0;
+          }
+        });
+
+        uploadForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+
+          const fileInput = document.getElementById("fileInput");
+          const nameInput = document.getElementById("nameInput");
+          const descriptionInput = document.getElementById("descriptionInput");
+          const resultDiv = document.getElementById("resultDiv");
+
+          if (!fileInput.files || fileInput.files.length === 0) {
+            statusText.textContent = "Please select a file";
+            return;
+          }
+
+          try {
+            // Reset UI
+            resultDiv.textContent = "";
+            progressBar.value = 0;
+            statusText.textContent = "Starting upload...";
+
+            // Create metadata
+            const metadata = {
+              name: nameInput.value,
+              description: descriptionInput.value,
+              timestamp: new Date().toISOString(),
+            };
+
+            let result;
+            const multipleMode = document.getElementById(
+              "multipleFilesCheckbox"
+            ).checked;
+
+            // Progress callback
+            const updateProgress = (percent) => {
+              progressBar.value = percent;
+              statusText.textContent = `Uploading: ${Math.round(percent)}%`;
+            };
+
+            if (multipleMode) {
+              statusText.textContent = `Uploading ${fileInput.files.length} files...`;
+              result = await uploadMultipleWithProgress(
+                fileInput.files,
+                metadata,
+                updateProgress
+              );
+            } else {
+              statusText.textContent = `Uploading ${fileInput.files[0].name}...`;
+              result = await uploadWithProgress(
+                fileInput.files[0],
+                metadata,
+                updateProgress
+              );
+            }
+
+            // Display result
+            progressBar.value = 100;
+            statusText.textContent = "Upload complete!";
+            resultDiv.textContent = JSON.stringify(result, null, 2);
+          } catch (error) {
+            statusText.textContent = `Error: ${error.message}`;
+            resultDiv.textContent = `Upload failed: ${error.message}`;
+          }
+        });
+      });
+    </script> -->
+  </body>
+</html>
